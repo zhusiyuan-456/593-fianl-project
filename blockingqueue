@@ -119,3 +119,176 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E> implements BlockingQ
 
         this.notFull.signal();
     }
+    public ArrayBlockingQueue(int capacity) {
+        this(capacity, false);
+    }
+
+    public ArrayBlockingQueue(int capacity, boolean fair) {
+        if (capacity <= 0) {
+            throw new IllegalArgumentException();
+        } else {
+            this.items = new Object[capacity];
+            this.lock = new ReentrantLock(fair);
+            this.notEmpty = this.lock.newCondition();
+            this.notFull = this.lock.newCondition();
+        }
+    }
+
+    public ArrayBlockingQueue(int capacity, boolean fair, Collection<? extends E> c) {
+        this(capacity, fair);
+        ReentrantLock lock = this.lock;
+        lock.lock();
+
+        try {
+            Object[] items = this.items;
+            int i = 0;
+
+            Object e;
+            try {
+                for(Iterator var7 = c.iterator(); var7.hasNext(); items[i++] = Objects.requireNonNull(e)) {
+                    e = var7.next();
+                }
+            } catch (ArrayIndexOutOfBoundsException var12) {
+                throw new IllegalArgumentException();
+            }
+
+            this.count = i;
+            this.putIndex = i == capacity ? 0 : i;
+        } finally {
+            lock.unlock();
+        }
+
+    }
+
+    public boolean add(E e) {
+        return super.add(e);
+    }
+
+    public boolean offer(E e) {
+        Objects.requireNonNull(e);
+        ReentrantLock lock = this.lock;
+        lock.lock();
+
+        boolean var3;
+        try {
+            if (this.count != this.items.length) {
+                this.enqueue(e);
+                var3 = true;
+                return var3;
+            }
+
+            var3 = false;
+        } finally {
+            lock.unlock();
+        }
+
+        return var3;
+    }
+
+    public void put(E e) throws InterruptedException {
+        Objects.requireNonNull(e);
+        ReentrantLock lock = this.lock;
+        lock.lockInterruptibly();
+
+        try {
+            while(this.count == this.items.length) {
+                this.notFull.await();
+            }
+
+            this.enqueue(e);
+        } finally {
+            lock.unlock();
+        }
+
+    }
+
+    public boolean offer(E e, long timeout, TimeUnit unit) throws InterruptedException {
+        Objects.requireNonNull(e);
+        long nanos = unit.toNanos(timeout);
+        ReentrantLock lock = this.lock;
+        lock.lockInterruptibly();
+
+        try {
+            boolean var8;
+            while(this.count == this.items.length) {
+                if (nanos <= 0L) {
+                    var8 = false;
+                    return var8;
+                }
+
+                nanos = this.notFull.awaitNanos(nanos);
+            }
+
+            this.enqueue(e);
+            var8 = true;
+            return var8;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public E poll() {
+        ReentrantLock lock = this.lock;
+        lock.lock();
+
+        Object var2;
+        try {
+            var2 = this.count == 0 ? null : this.dequeue();
+        } finally {
+            lock.unlock();
+        }
+
+        return var2;
+    }
+
+    public E take() throws InterruptedException {
+        ReentrantLock lock = this.lock;
+        lock.lockInterruptibly();
+
+        Object var2;
+        try {
+            while(this.count == 0) {
+                this.notEmpty.await();
+            }
+
+            var2 = this.dequeue();
+        } finally {
+            lock.unlock();
+        }
+
+        return var2;
+    }
+
+    public E poll(long timeout, TimeUnit unit) throws InterruptedException {
+        long nanos = unit.toNanos(timeout);
+        ReentrantLock lock = this.lock;
+        lock.lockInterruptibly();
+
+        try {
+            Object var7;
+            while(this.count == 0) {
+                if (nanos <= 0L) {
+                    var7 = null;
+                    return var7;
+                }
+
+                nanos = this.notEmpty.awaitNanos(nanos);
+            }
+
+            var7 = this.dequeue();
+            return var7;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public E peek() {
+        ReentrantLock lock = this.lock;
+        lock.lock();
+
+        Object var2;
+        try {
+            var2 = this.itemAt(this.takeIndex);
+        } finally {
+            lock.unlock();
+        }
